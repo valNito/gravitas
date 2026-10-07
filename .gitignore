@@ -1,0 +1,13 @@
+# Árboles de compilación de CMake
+build/
+out/
+cmake-build-*/
+
+# Archivos locales de CMake y herramientas
+CMakeUserPresets.json
+compile_commands.json
+
+# Estado de los IDE
+.vs/
+.idea/
+*.user
