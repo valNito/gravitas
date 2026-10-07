@@ -24,6 +24,14 @@ Vector3 totalMomentum(std::span<const Body> bodies) noexcept {
     return momentum;
 }
 
+Vector3 angularMomentum(std::span<const Body> bodies) noexcept {
+    Vector3 momentum{};
+    for (const Body& body : bodies) {
+        momentum += body.position.cross(body.velocity) * body.mass();
+    }
+    return momentum;
+}
+
 Vector3 centerOfMass(std::span<const Body> bodies) noexcept {
     Vector3 weighted{};
     double totalMass = 0.0;

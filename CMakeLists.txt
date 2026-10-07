@@ -97,8 +97,8 @@ endif()
 # comprobaciones.
 if(GRAVITAS_BUILD_TESTS)
     enable_testing()
-    foreach(test_name IN ITEMS test_vector3 test_body test_gravity test_simulation
-                               test_scenarios)
+    foreach(test_name IN ITEMS test_vector3 test_body test_gravity test_diagnostics
+                               test_simulation test_scenarios)
         add_executable(${test_name} tests/${test_name}.cpp)
         target_link_libraries(${test_name} PRIVATE gravitas::core)
         # Console.hpp: consola en UTF-8 en Windows.

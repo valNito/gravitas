@@ -56,6 +56,46 @@ std::vector<Body> makeEccentricEarthMoon(double speedFactor) {
     return bodies;
 }
 
+// Tres cuerpos en 3D con una deriva neta (momento total != 0): la Tierra, la
+// Luna y un tercer cuerpo fuera del plano, todos con una velocidad común
+// añadida. Sirve para comprobar la conservación y no solo que una cantidad "se
+// mantiene cerca de cero".
+std::vector<Body> makeDriftingThreeBody() {
+    std::vector<Body> bodies = scenarios::makeEarthMoon();
+    bodies.emplace_back(1.0e22, Vector3{0.0, 2.0e8, 1.0e7}, Vector3{500.0, 0.0, 100.0});
+    for (Body& body : bodies) {
+        body.velocity += Vector3{100.0, -50.0, 20.0};
+    }
+    return bodies;
+}
+
+// Suma de m |r x v| sobre todos los cuerpos: la escala natural con la que se
+// compara la variación del momento angular total. A diferencia de |L|, no se
+// reduce cuando las contribuciones de los cuerpos se cancelan entre sí.
+double angularMomentumScale(std::span<const Body> bodies) {
+    double scale = 0.0;
+    for (const Body& body : bodies) {
+        scale += body.mass() * body.position.cross(body.velocity).magnitude();
+    }
+    return scale;
+}
+
+// Máxima variación relativa del momento angular total a lo largo de `steps`
+// pasos de Velocity Verlet, medida después de cada paso.
+double maxRelativeAngularMomentumDrift(std::vector<Body> bodies, double dt,
+                                       std::uint64_t steps) {
+    Simulation simulation{std::move(bodies), dt};
+    const Vector3 l0 = gravitas::angularMomentum(simulation.bodies());
+    const double scale = angularMomentumScale(simulation.bodies());
+    double maxDrift = 0.0;
+    for (std::uint64_t i = 0; i < steps; ++i) {
+        simulation.step();
+        const Vector3 drift = gravitas::angularMomentum(simulation.bodies()) - l0;
+        maxDrift = std::max(maxDrift, drift.magnitude() / scale);
+    }
+    return maxDrift;
+}
+
 // --- Gestión del estado de la simulación ---------------------------------------
 
 void rejectsInvalidTimeStep() {
@@ -139,13 +179,7 @@ void circularBinaryInitialConditions() {
 // --- Validación física del movimiento integrado ---------------------------------
 
 void momentumConservation() {
-    // Tres cuerpos con una deriva neta (momento total != 0), para que la prueba
-    // compruebe la conservación y no solo que "se mantiene cerca de cero".
-    std::vector<Body> bodies = scenarios::makeEarthMoon();
-    bodies.emplace_back(1.0e22, Vector3{0.0, 2.0e8, 1.0e7}, Vector3{500.0, 0.0, 100.0});
-    for (Body& body : bodies) {
-        body.velocity += Vector3{100.0, -50.0, 20.0};
-    }
+    const std::vector<Body> bodies = makeDriftingThreeBody();
     const Vector3 initial = gravitas::totalMomentum(bodies);
     const double scale = momentumScale(bodies);
 
@@ -283,6 +317,89 @@ void timeStepConvergence() {
     CHECK(positionErrors[2] < positionErrors[1] && positionErrors[1] < positionErrors[0]);
 }
 
+// --- Momento angular ----------------------------------------------------------------
+//
+// Con fuerzas internas centrales, Velocity Verlet conserva el momento angular
+// total EXACTAMENTE en aritmética exacta, con cualquier paso temporal. El paso
+// equivale a tres transformaciones, y ninguna cambia L:
+//   - medio impulso v += 1/2 a dt: cambia L en 1/2 dt suma m_i r_i x a_i, que es
+//     nulo porque cada par aporta m_i m_j (r_i - r_j) x g_ij = 0, con g_ij
+//     paralelo a r_j - r_i (fuerza central);
+//   - deriva r += v dt con la velocidad a medio paso: (r + v dt) x v = r x v;
+//   - el segundo medio impulso, igual que el primero.
+// Solo queda el redondeo, de ~1e-16 relativo por operación.
+
+constexpr double kStepsPerDay60s = kSecondsPerDay / 60.0;
+
+void angularMomentumConservation() {
+    // Órbita excéntrica (e ~ 0,51) durante 27 días con dt = 60 s: 38 880 pasos.
+    // Escalar ambas velocidades deja la órbita en el plano xy, así que L solo
+    // tiene componente z.
+    const double eccentric = maxRelativeAngularMomentumDrift(
+        makeEccentricEarthMoon(0.7), 60.0, static_cast<std::uint64_t>(27.0 * kStepsPerDay60s));
+
+    // Tres cuerpos en 3D con momento lineal neto durante 14 días: L tiene las
+    // tres componentes y se mide respecto del origen, un punto fijo que el
+    // sistema abandona; aun así se conserva porque el sistema está aislado.
+    const double drifting = maxRelativeAngularMomentumDrift(
+        makeDriftingThreeBody(), 60.0, static_cast<std::uint64_t>(14.0 * kStepsPerDay60s));
+
+    // La tolerancia admite la acumulación lineal del redondeo, el peor caso:
+    // ~40 000 pasos x unas pocas unidades de 1e-16. Un integrador que no
+    // conserve L se desvía ~1e-3 en estos escenarios (ver el control con Euler
+    // explícito más abajo), muchos órdenes de magnitud por encima.
+    constexpr double kTolerance = 1e-11;
+    report("excéntrica, dt = 60 s, 27 días: max |L - L0| / suma m|r x v|", eccentric, kTolerance);
+    report("3 cuerpos en 3D con deriva, dt = 60 s, 14 días: max |L - L0| / suma m|r x v|",
+           drifting, kTolerance);
+    CHECK_LE(eccentric, kTolerance);
+    CHECK_LE(drifting, kTolerance);
+}
+
+// Avanza los cuerpos con Euler explícito (r += v dt, v += a dt), un método de
+// primer orden que NO conserva el momento angular: cada paso cambia L en
+// dt^2 suma m_i v_i x a_i. Solo sirve como control negativo de la prueba.
+double eulerRelativeAngularMomentumDrift(std::vector<Body> bodies, double dt,
+                                         std::uint64_t steps) {
+    const Vector3 l0 = gravitas::angularMomentum(bodies);
+    const double scale = angularMomentumScale(bodies);
+    for (std::uint64_t i = 0; i < steps; ++i) {
+        gravitas::computeAccelerations(bodies);
+        for (Body& body : bodies) {
+            body.position += body.velocity * dt;
+            body.velocity += body.acceleration * dt;
+        }
+    }
+    return (gravitas::angularMomentum(bodies) - l0).magnitude() / scale;
+}
+
+void angularMomentumIsIndependentOfTimeStep() {
+    // Con dt = 1 h, 60 veces el paso habitual, la energía ya no se conserva
+    // bien (su error crece como dt^2), pero el momento angular sigue
+    // conservándose al nivel del redondeo: es una propiedad estructural del
+    // integrador, no una cuestión de precisión.
+    const double duration = 27.0 * kSecondsPerDay;
+    constexpr double kCoarseStep = 3600.0;
+    const auto coarseSteps = static_cast<std::uint64_t>(duration / kCoarseStep);
+    const double angular =
+        maxRelativeAngularMomentumDrift(makeEccentricEarthMoon(0.7), kCoarseStep, coarseSteps);
+    const double energy = maxRelativeEnergyError(makeEccentricEarthMoon(0.7), kCoarseStep, duration);
+    std::cout << "    excéntrica, dt = 1 h, 27 días: max |dE / E0| = " << energy
+              << " (solo informativo)\n";
+    report("excéntrica, dt = 1 h, 27 días: max |L - L0| / suma m|r x v|", angular, 1e-12);
+    CHECK_LE(angular, 1e-12);
+
+    // Control negativo: con el mismo escenario y dt = 60 s, Euler explícito
+    // cambia L en ~(w dt)^2 por paso, acumulado durante 38 880 pasos. Si la
+    // prueba de conservación no lo distinguiera de Velocity Verlet, no
+    // demostraría nada.
+    const double euler = eulerRelativeAngularMomentumDrift(
+        makeEccentricEarthMoon(0.7), 60.0, static_cast<std::uint64_t>(27.0 * kStepsPerDay60s));
+    std::cout << "    control, Euler explícito, dt = 60 s, 27 días: |L - L0| / suma m|r x v|: "
+              << euler << " (debe superar 1e-6)\n";
+    CHECK(euler > 1e-6);
+}
+
 } // namespace
 
 int main() {
@@ -296,6 +413,8 @@ int main() {
         gravitas::test::TestCase{"Estabilidad de la órbita circular", circularOrbitStability},
         gravitas::test::TestCase{"Conservación de la energía mecánica", energyConservation},
         gravitas::test::TestCase{"Convergencia con el paso temporal (segundo orden)", timeStepConvergence},
+        gravitas::test::TestCase{"Conservación del momento angular", angularMomentumConservation},
+        gravitas::test::TestCase{"Momento angular: conservación independiente del paso temporal", angularMomentumIsIndependentOfTimeStep},
     };
     return gravitas::test::runTests(tests);
 }

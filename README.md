@@ -11,11 +11,13 @@ pequeñas y verificadas.
 
 ## Estado actual
 
-**Etapa 2 — Gravedad y simulación orbital, más una línea base de rendimiento.**
+**Etapa 3.1 — Conservación del momento angular.**
 GRAVITAS integra el movimiento de cuerpos bajo la gravedad newtoniana, incluye
 una aplicación de consola que simula un sistema Tierra-Luna idealizado y mide el
 costo de su gravedad directa O(N²) en cúmulos estelares de hasta 20 000 cuerpos,
-como referencia para optimizaciones futuras.
+como referencia para optimizaciones futuras (etapa 2). La etapa 3 valida la
+física de las simulaciones; la 3.1 añade el momento angular y verifica su
+conservación.
 
 Implementado:
 
@@ -38,7 +40,13 @@ Implementado:
   paso temporal y del tiempo transcurrido. Calcula las aceleraciones iniciales y
   hace avanzar el sistema paso a paso.
 - **Diagnósticos** (`Diagnostics.hpp`). Energía cinética y mecánica, momento
-  lineal total y centro de masas.
+  lineal total, momento angular total `L = Σ mᵢ (rᵢ × vᵢ)` respecto del origen
+  y centro de masas.
+- **Conservación del momento angular (etapa 3.1).** Con fuerzas centrales,
+  Velocity Verlet conserva L exactamente salvo redondeo, con cualquier paso
+  temporal: las pruebas miden una variación relativa de ~1e-14 en 27 días
+  (órbita excéntrica, e ≈ 0,51) y en un sistema 3D de tres cuerpos con momento
+  lineal neto, frente a ~6e-3 con Euler explícito en el mismo escenario.
 - **Escenarios** (`Scenarios.hpp`). Una órbita circular de dos cuerpos alrededor
   del centro de masas (centro de masas en el origen y en reposo, momento total
   nulo) y la configuración Tierra-Luna construida a partir de ella. Una
@@ -46,7 +54,8 @@ Implementado:
   de la función de distribución exacta de Plummer, en su sistema del centro de
   masas, reproducible a partir de una semilla.
 - **Aplicación de consola** (`gravitas`). Ejecuta la simulación Tierra-Luna e
-  imprime las posiciones día a día, junto con diagnósticos de energía y momento.
+  imprime las posiciones día a día, junto con diagnósticos de energía, momento
+  lineal y momento angular.
 - **Prueba de rendimiento** (`gravitas_benchmark`). Mide el tiempo de la
   evaluación directa O(N²) de las fuerzas en cúmulos de Plummer de 100 a 20 000
   cuerpos.
@@ -144,7 +153,8 @@ Ambos cuerpos parten en una órbita circular alrededor de su centro de masas
 común, que es el origen del sistema de referencia; la Tierra no está fija. El
 programa imprime las posiciones x/y de la Tierra y la Luna en km desde el día 0
 hasta el día 27, seguidas de la distancia inicial y final, la energía mecánica,
-el error relativo de energía y el momento lineal total.
+el error relativo de energía, el momento lineal total y el momento angular
+inicial y final con su error relativo.
 
 La salida de la consola está en español, codificada en UTF-8. En Windows, el
 programa cambia la consola a UTF-8 mientras se ejecuta y restaura la página de
@@ -209,7 +219,8 @@ ctest --test-dir build-debug --output-on-failure
 | `test_vector3`       | Aritmética vectorial, productos, módulos, normalización      |
 | `test_body`          | Construcción de cuerpos y validación de la masa              |
 | `test_gravity`       | Módulo y dirección de la aceleración, tercera ley, cuerpos coincidentes, energía potencial |
-| `test_simulation`    | Validación del paso temporal, paso de Verlet, condiciones iniciales circulares, conservación del momento y de la energía, estabilidad orbital frente a la solución analítica, convergencia de segundo orden |
+| `test_diagnostics`   | Momento angular: valores exactos, aditividad, dependencia del punto de referencia (L − c × P) y binaria circular frente a la solución analítica μ d² ω |
+| `test_simulation`    | Validación del paso temporal, paso de Verlet, condiciones iniciales circulares, conservación del momento lineal, de la energía y del momento angular (también con paso grueso, y con Euler explícito como control negativo), estabilidad orbital frente a la solución analítica, convergencia de segundo orden |
 | `test_scenarios`     | Esfera de Plummer: validación de parámetros, determinismo, masas iguales, sistema del centro de masas, radio de media masa, equilibrio virial, energía total e isotropía frente al modelo analítico |
 
 Cada ejecutable de prueba también puede ejecutarse directamente para ver sus
