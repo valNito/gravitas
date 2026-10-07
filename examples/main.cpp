@@ -12,7 +12,7 @@ int main() {
     using gravitas::Body;
     using gravitas::Vector3;
 
-    const gravitas::console::Utf8Console utf8Console;
+    [[maybe_unused]] const gravitas::console::Utf8Console utf8Console;
 
     // Valores aproximados de la Tierra y la Luna, unidades SI (kg, m, m/s).
     const Body earth{5.972e24, Vector3{0.0, 0.0, 0.0}, Vector3{0.0, 0.0, 0.0}};
