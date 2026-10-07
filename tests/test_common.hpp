@@ -58,7 +58,7 @@ struct TestCase {
 };
 
 [[nodiscard]] inline int runTests(std::span<const TestCase> tests) {
-    const console::Utf8Console utf8Console;
+    [[maybe_unused]] const console::Utf8Console utf8Console;
     int failedCases = 0;
     for (const TestCase& test : tests) {
         currentFailures = 0;
