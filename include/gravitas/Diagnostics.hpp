@@ -20,6 +20,18 @@ namespace gravitas {
 /// Momento lineal total en kg m/s: suma de m v.
 [[nodiscard]] Vector3 totalMomentum(std::span<const Body> bodies) noexcept;
 
+/// Momento angular total respecto del origen de coordenadas, en kg m^2/s:
+///
+///     L = suma de m_i (r_i x v_i)
+///
+/// Depende del punto de referencia: respecto de un punto c vale L - c x P,
+/// con P = totalMomentum(). Si P = 0, no depende del punto elegido.
+///
+/// En un sistema aislado con fuerzas internas centrales (como la gravedad
+/// newtoniana) se conserva respecto de cualquier punto fijo, también cuando
+/// P != 0.
+[[nodiscard]] Vector3 angularMomentum(std::span<const Body> bodies) noexcept;
+
 /// Posición media ponderada por la masa, en metros. Devuelve el vector cero
 /// para un conjunto vacío de cuerpos.
 [[nodiscard]] Vector3 centerOfMass(std::span<const Body> bodies) noexcept;

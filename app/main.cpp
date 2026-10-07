@@ -31,7 +31,7 @@ constexpr std::uint64_t kStepsPerDay = static_cast<std::uint64_t>(kSecondsPerDay
 static_assert(static_cast<double>(kStepsPerDay) * kTimeStep == kSecondsPerDay);
 
 // Ancho visible de las etiquetas del resumen.
-constexpr std::size_t kLabelWidth = 31;
+constexpr std::size_t kLabelWidth = 36;
 
 // Imprime "  <texto>" rellenado hasta kLabelWidth columnas visibles. Cuenta
 // puntos de código UTF-8 en lugar de bytes, así que las etiquetas con tildes
@@ -74,6 +74,11 @@ void printMomentum(std::string_view label, const gravitas::Vector3& momentum, do
               << " kg·m/s = " << momentum.magnitude() / scale << " × Σ|m·v|\n";
 }
 
+void printAngularMomentum(std::string_view label, const gravitas::Vector3& momentum) {
+    printLabel(label);
+    std::cout << momentum << " kg·m²/s\n";
+}
+
 } // namespace
 
 int main() {
@@ -87,6 +92,7 @@ int main() {
     const double initialEnergy = mechanicalEnergy(simulation.bodies());
     const Vector3 initialMomentum = totalMomentum(simulation.bodies());
     const double initialMomentumScale = momentumScale(simulation.bodies());
+    const Vector3 initialAngularMomentum = angularMomentum(simulation.bodies());
 
     std::cout << "GRAVITAS — Simulación de N cuerpos\n\n"
               << "Escenario: Tierra-Luna\n"
@@ -134,6 +140,16 @@ int main() {
     printMomentum("Momento lineal total inicial:", initialMomentum, initialMomentumScale);
     printMomentum("Momento lineal total final:", totalMomentum(simulation.bodies()),
                   momentumScale(simulation.bodies()));
+
+    const Vector3 finalAngularMomentum = angularMomentum(simulation.bodies());
+    std::cout << std::setprecision(9);
+    printAngularMomentum("Momento angular inicial:", initialAngularMomentum);
+    printAngularMomentum("Momento angular final:", finalAngularMomentum);
+    std::cout << std::setprecision(3);
+    printLabel("Error relativo del momento angular:");
+    std::cout << (finalAngularMomentum - initialAngularMomentum).magnitude()
+                     / initialAngularMomentum.magnitude()
+              << '\n';
 
     return 0;
 }
