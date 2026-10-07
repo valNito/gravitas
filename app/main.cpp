@@ -79,7 +79,7 @@ void printMomentum(std::string_view label, const gravitas::Vector3& momentum, do
 int main() {
     using namespace gravitas;
 
-    const console::Utf8Console utf8Console;
+    [[maybe_unused]] const console::Utf8Console utf8Console;
 
     Simulation simulation{scenarios::makeEarthMoon(), kTimeStep};
 

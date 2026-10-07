@@ -103,7 +103,7 @@ std::uint64_t pairCount(std::size_t count) {
 
 int main() {
     using namespace gravitas;
-    const console::Utf8Console utf8Console;
+    [[maybe_unused]] const console::Utf8Console utf8Console;
 
     std::cout << "GRAVITAS — Rendimiento del cálculo gravitacional directo\n\n"
               << "Método:      suma directa por pares, O(N²) (computeAccelerations)\n"
